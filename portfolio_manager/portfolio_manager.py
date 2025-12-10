@@ -49,43 +49,6 @@ class PortfolioManager:
         self.pnl = PnLCalculator(self.initial_capital)
         self.is_liquidated = False
     
-    def _calc_results(self) -> Dict: 
-
-        # Truncate index if liquidated early
-        n = len(self.pnl.equity_curve)
-        idx = self.index[:n]
-
-        # Convert to Series with index
-        equity_curve = pd.Series(self.pnl.equity_curve, index=idx)
-        net_pnl_series = pd.Series(self.pnl.net_pnl_series, index=idx)
-        gross_pnl_series = pd.Series(self.pnl.gross_pnl_series, index=idx)
-        cost_series = pd.Series(self.pnl.cost_series, index=idx)
-        position_history = pd.DataFrame(self.position_history, index=idx)
-
-        #Basic metrics 
-        total_return = (self.pnl.equity - self.initial_capital) / self.initial_capital
-        total_costs = cost_series.sum()
-
-        #Risk adjusted 
-        risk_adjusted = MetricsCalculator.RiskAdjusted.get_all(net_pnl_series, self.initial_capital)
-
-        return {
-            'position_history': position_history,  
-            'equity_curve': equity_curve, 
-            'net_pnl_series': net_pnl_series, 
-            'gross_pnl_series': gross_pnl_series,
-            'cost_series': cost_series, 
-
-            #summary metrics 
-            'final_equity': self.pnl.equity, 
-            'total_return': total_return, 
-            'total_costs': total_costs, 
-            'is_liquidated': self.is_liquidated, 
-
-            #risk adjusted metrics 
-            **risk_adjusted
-        }
-    
     #TODO - Make this code more tidier, just an absolute mess of stuff here 
     def backtest(self, 
                  desired_positions: pd.DataFrame, 
@@ -146,4 +109,41 @@ class PortfolioManager:
             prev_position_y = actual_y
             prev_position_x = actual_x
 
-        return self._calculate_metrics()
+        return self._calc_results()
+    
+    def _calc_results(self) -> Dict: 
+
+        # Truncate index if liquidated early
+        n = len(self.pnl.equity_curve)
+        idx = self.index[:n]
+
+        # Convert to Series with index
+        equity_curve = pd.Series(self.pnl.equity_curve, index=idx)
+        net_pnl_series = pd.Series(self.pnl.net_pnl_series, index=idx)
+        gross_pnl_series = pd.Series(self.pnl.gross_pnl_series, index=idx)
+        cost_series = pd.Series(self.pnl.cost_series, index=idx)
+        position_history = pd.DataFrame(self.position_history, index=idx)
+
+        #Basic metrics 
+        total_return = (self.pnl.equity - self.initial_capital) / self.initial_capital
+        total_costs = cost_series.sum()
+
+        #Risk adjusted 
+        risk_adjusted = MetricsCalculator.RiskAdjusted.get_all(net_pnl_series, self.initial_capital)
+
+        return {
+            'position_history': position_history,  
+            'equity_curve': equity_curve, 
+            'net_pnl_series': net_pnl_series, 
+            'gross_pnl_series': gross_pnl_series,
+            'cost_series': cost_series, 
+
+            #summary metrics 
+            'final_equity': self.pnl.equity, 
+            'total_return': total_return, 
+            'total_costs': total_costs, 
+            'is_liquidated': self.is_liquidated, 
+
+            #risk adjusted metrics 
+            **risk_adjusted
+        }
