@@ -6,8 +6,14 @@ class BollingerBandTradeStrategy:
     def __init__(self, entry_threshold, exit_threshold):
         self.entry_threshold = entry_threshold
         self.exit_threshold = exit_threshold
+
+    def get_positions(self, z_score: pd.Series, beta: pd.Series) -> pd.Series: 
+        '''Main function: convert z_score pricing signals into atual positions'''
+        actions = self._generate_trading_actions(z_score)
+        positions = self._calculate_desired_positions(beta = beta, actions = actions)
+        return positions 
     
-    def generate_trading_actions(self, z_score: pd.Series):
+    def _generate_trading_actions(self, z_score: pd.Series):
         """
         WHEN you trade 
         
@@ -93,7 +99,7 @@ class BollingerBandTradeStrategy:
         
         # Generate actions if needed
         if actions is None:
-            actions = self.generate_trading_actions(z_score)
+            actions = self._generate_trading_actions(z_score)
         
         # Generate positions if needed
         if positions is None:
@@ -104,7 +110,10 @@ class BollingerBandTradeStrategy:
         # Plot 1: Z-score with trade signals
         axes[0].plot(z_score, label='Z-Score', color='blue', linewidth=2)
         axes[0].axhline(self.entry_threshold, color='r', linestyle='--', alpha=0.3)
-        axes[0].axhline(-self.entry_threshold, color='g', linestyle='--', alpha=0.3)
+        axes[0].axhline(-self.entry_threshold, color='r', linestyle='--', alpha=0.3)
+        axes[0].axhline(self.exit_threshold, color='g', linestyle='--', alpha=0.3)
+        axes[0].axhline(-self.exit_threshold, color='g', linestyle='--', alpha=0.3)
+
         axes[0].axhline(0, color='black', linestyle='-', alpha=0.2)
         
         # Mark trades
@@ -151,51 +160,6 @@ class BollingerBandTradeStrategy:
 
         fig.tight_layout()
 
-    def plot_trading_actions(self, z_score: pd.Series, trades: pd.DataFrame = None):
-        """
-        Plot z-score with trading actions overlaid
-        
-        Args:
-            z_score: pd.Series of z-scores
-            trades: optional pd.DataFrame with ['enter_long', 'enter_short', 'exit']
-                    if None, will generate trades automatically
-        """
-        import matplotlib.pyplot as plt
-        
-        # Generate trades if not provided
-        if trades is None:
-            trades = self.generate_trading_actions(z_score)
-        
-        fig, ax = plt.subplots(figsize=(14, 6))
-        
-        # Plot z-score line
-        ax.plot(z_score, label='Z-Score', linewidth=2, color='blue', alpha=0.7)
-        
-        # Plot threshold lines
-        ax.axhline(self.entry_threshold, color='red', linestyle='--', alpha=0.3, label='Entry threshold')
-        ax.axhline(-self.entry_threshold, color='green', linestyle='--', alpha=0.3)
-        ax.axhline(self.exit_threshold, color='orange', linestyle='--', alpha=0.3, label='Exit threshold')
-        ax.axhline(-self.exit_threshold, color='orange', linestyle='--', alpha=0.3)
-        ax.axhline(0, color='black', linestyle='-', alpha=0.2)
-        
-        # Plot trading actions
-        enter_long_idx = trades[trades['enter_long'] == 1].index
-        enter_short_idx = trades[trades['enter_short'] == 1].index
-        exit_idx = trades[trades['exit'] == 1].index
-        
-        ax.scatter(enter_long_idx, z_score[enter_long_idx], 
-                   color='green', s=150, marker='^', label='Enter Long', zorder=5, edgecolors='black')
-        ax.scatter(enter_short_idx, z_score[enter_short_idx], 
-                   color='red', s=150, marker='v', label='Enter Short', zorder=5, edgecolors='black')
-        ax.scatter(exit_idx, z_score[exit_idx], 
-                   color='black', s=150, marker='X', label='Exit', zorder=5)
-        
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Z-Score')
-        ax.set_title('Trading Actions on Z-Score')
-        ax.legend(loc='upper right')
-        ax.grid(True, alpha=0.3)
-    
 def generate_synthetic_zscore(n_periods=100, seed=42):
     '''Generate synthetic z score data that oscillates in a predictable pattern'''
     np.random.seed(seed)
