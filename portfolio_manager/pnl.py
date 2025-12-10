@@ -24,7 +24,7 @@ class PnLCalculator:
         self.gross_pnl_series.append(pnl) #before costs
         self.net_pnl_series.append(net_pnl) #after costs
         self.cost_series.append(cost)
-        self.equity_curve(self.equity)
+        self.equity_curve.append(self.equity)
     
     def deduct_cost(self, total_cost): 
          self.pnl -= total_cost
