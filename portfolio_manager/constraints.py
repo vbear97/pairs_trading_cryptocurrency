@@ -40,3 +40,16 @@ class ConstraintChecker:
         '''
         liquidation_level = initial_capital * self.margin_threshold
         return equity < liquidation_level 
+
+class DummyConstraintChecker:
+    """Pass-through constraint checker for idealized backtesting"""
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def check_capital_limit(self, desired_y, desired_x, price_y, price_x):
+        """Return desired positions unchanged"""
+        return True, desired_y, desired_x
+    
+    def check_margin_call(self, equity, initial_capital):
+        """Never trigger margin calls"""
+        return False

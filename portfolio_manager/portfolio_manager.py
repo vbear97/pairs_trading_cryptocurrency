@@ -2,10 +2,10 @@ from typing import Dict, Tuple
 import numpy as np 
 import pandas as pd
 
-from pairs_trading_cryptocurrency.portfolio_manager.constraints import ConstraintChecker 
+from pairs_trading_cryptocurrency.portfolio_manager.constraints import ConstraintChecker, DummyConstraintChecker 
 from pairs_trading_cryptocurrency.portfolio_manager.metrics import MetricsCalculator
 from pairs_trading_cryptocurrency.portfolio_manager.pnl import PnLCalculator
-from pairs_trading_cryptocurrency.portfolio_manager.transaction_costs import CostCalculator 
+from pairs_trading_cryptocurrency.portfolio_manager.transaction_costs import CostCalculator, DummyCostCalculator 
 
 class PortfolioManager: 
     '''
@@ -20,15 +20,20 @@ class PortfolioManager:
     '''
     #TODO - put in terms of UNITS of bitcoin 
     def __init__(self,
+                 idealised: bool = False,
                  initial_capital: float = 10_000,
                  max_leverage: float = 3.0,
                  transaction_cost: float = 0.0025,
                  margin_threshold: float = 0.5):
         
         self.initial_capital = initial_capital
+        self.position_history = []
         
         # Create helper objects
-        self.position_history = []
+        if idealised:
+            self.constraints = DummyConstraintChecker()
+            self.costs = DummyCostCalculator()
+            
         self.constraints = ConstraintChecker(
             max_position_value=initial_capital * max_leverage,
             margin_threshold=margin_threshold
