@@ -1,42 +1,40 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+from tqdm import tqdm
 
 class PricingSignal: 
     def __init__(self, hedge_lookback, spread_lookback):
         self.hedge_window = hedge_lookback 
         self.spread_window = spread_lookback 
     
-    def _calculate_hedge_ratio(self, x, y): 
-        #TODO - handle NaN's 
+    def _calculate_hedge_ratio(self, x, y, fit_intercept=True): 
         '''Calculate dynamic hedge ratio'''
         betas = []
-        intercept = []
+        intercepts = []
 
-        for i in range(self.hedge_window, len(x)):
+        for i in tqdm(range(self.hedge_window, len(x))):
             # Get window of data
             x_window = x.iloc[i - self.hedge_window : i]
             y_window = y.iloc[i - self.hedge_window : i]
             
-            # Add constant for intercept
-            X = sm.add_constant(x_window)
+            # Add constant for intercept if needed
+            X = sm.add_constant(x_window) if fit_intercept else x_window
             
             # Run OLS: y = alpha + beta * x
             model = sm.OLS(y_window, X).fit()
             params = list(model.params)
-            intercept.append(params[0])
-            betas.append(params[1])
-            #TODO - what is the intercept for in pairs trading? 
+
+            if fit_intercept:
+                intercepts.append(params[0])
+                betas.append(params[1])
+            else:
+                intercepts.append(0.0)  # or None, or np.nan depending on your needs
+                betas.append(params[0])
         
         # Create series with proper index
-        beta_series = pd.Series(
-            betas, 
-            index=x.index[self.hedge_window:]
-        )
-        intercept_series = pd.Series(
-            intercept, 
-            index=x.index[self.hedge_window:]
-        )
+        beta_series = pd.Series(betas, index=x.index[self.hedge_window:])
+        intercept_series = pd.Series(intercepts, index=x.index[self.hedge_window:])
         
         # Reindex to match original data (fill early values with NaN)
         beta_series = beta_series.reindex(x.index)
@@ -73,6 +71,7 @@ def generate_pricing_signal_test_data(n_periods=200,
                                       start_date='2024-01-01',
                                       n_regimes=4,
                                       regime_betas=None,
+                                      intercept: float = 1.0, 
                                       noise_std=2.0,
                                       x_start=50,
                                       seed=42):
@@ -92,8 +91,8 @@ def generate_pricing_signal_test_data(n_periods=200,
         start = regime_idx * periods_per_regime
         end = start + periods_per_regime if regime_idx < n_regimes - 1 else n_periods
         
-        # y = beta * x + noise for this regime
-        regime_y = beta * x.iloc[start:end] + np.random.randn(end - start) * noise_std
+        # y = intercept + beta * x + noise for this regime
+        regime_y = intercept + (beta * x.iloc[start:end]) + np.random.randn(end - start) * noise_std
         y_values.extend(regime_y.values)
     
     y = pd.Series(y_values, index=dates)
