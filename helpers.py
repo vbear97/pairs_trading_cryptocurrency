@@ -34,6 +34,85 @@ def zero_crossings(spread: pd.Series) -> pd.Series:
     time_since_last_crossing = (spread.index[-1] - last_crossing_time).total_seconds()/SECONDS_TO_MINUTES
     return crossings, interarrival_times.dropna(), time_since_last_crossing
 
+def zero_crossings_with_buffer(spread: pd.Series, buffer_std: float = 1.0) -> tuple:
+    '''Zero crossings with buffer zone around mean'''
+    mu = spread.mean()
+    sigma = spread.std()
+    
+    # Define buffer zone
+    upper_threshold = mu + buffer_std * sigma
+    lower_threshold = mu - buffer_std * sigma
+    
+    # Classify: +1 above upper, -1 below lower, 0 in buffer
+    signs = pd.Series(0, index=spread.index)
+    signs[spread > upper_threshold] = 1
+    signs[spread < lower_threshold] = -1
+    
+    # Rest of your code
+    above_below = signs[signs != 0]
+    crossings = above_below.diff().loc[lambda x: x != 0].dropna()
+    
+    if len(crossings) == 0:
+        return crossings, pd.Series(dtype=float), np.nan
+    
+    interarrival_times = crossings.index.to_series().diff().dt.total_seconds() / SECONDS_TO_MINUTES
+    last_crossing_time = crossings.index[-1]
+    time_since_last = (spread.index[-1] - last_crossing_time).total_seconds() / SECONDS_TO_MINUTES
+    
+    return crossings, interarrival_times.dropna(), time_since_last
+
+def zero_crossings_percentile(spread: pd.Series, percentile: float = 0.10) -> tuple:
+    '''Use percentiles instead of std (more robust to outliers)'''
+    #Step 1 - Demean teh spread 
+    spread = spread - spread.mean()
+
+    # Upper/lower thresholds at percentiles
+    upper_threshold = spread.quantile(0.5 + percentile)
+    lower_threshold = spread.quantile(0.5 - percentile)
+    
+    signs = pd.Series(0, index=spread.index)
+    signs[spread > upper_threshold] = 1
+    signs[spread < lower_threshold] = -1
+
+    above_below = signs[signs != 0]
+    crossings = above_below.diff().loc[lambda x: x != 0].dropna()
+    
+    if len(crossings) == 0:
+        return crossings, pd.Series(dtype=float), np.nan
+    
+    interarrival_times = crossings.index.to_series().diff().dt.total_seconds() / SECONDS_TO_MINUTES
+    last_crossing_time = crossings.index[-1]
+    time_since_last = (spread.index[-1] - last_crossing_time).total_seconds() / SECONDS_TO_MINUTES
+
+    return crossings, interarrival_times.dropna(), time_since_last
+    
+def zero_crossings_adaptive(spread: pd.Series, 
+                           vol_window: int = 100,
+                           buffer_multiplier: float = 1.0) -> tuple:
+    '''Buffer adapts to recent volatility'''
+    mu = spread.mean()
+    rolling_std = spread.rolling(vol_window).std()
+    
+    # Adaptive thresholds based on recent vol
+    upper_threshold = mu + buffer_multiplier * rolling_std
+    lower_threshold = mu - buffer_multiplier * rolling_std
+    
+    signs = pd.Series(0, index=spread.index)
+    signs[spread > upper_threshold] = 1
+    signs[spread < lower_threshold] = -1
+
+    above_below = signs[signs != 0]
+    crossings = above_below.diff().loc[lambda x: x != 0].dropna()
+    
+    if len(crossings) == 0:
+        return crossings, pd.Series(dtype=float), np.nan
+    
+    interarrival_times = crossings.index.to_series().diff().dt.total_seconds() / SECONDS_TO_MINUTES
+    last_crossing_time = crossings.index[-1]
+    time_since_last = (spread.index[-1] - last_crossing_time).total_seconds() / SECONDS_TO_MINUTES
+
+    return crossings, interarrival_times.dropna(), time_since_last
+
 def quantile_crossing_time(spread: pd.Series, q = 0.5) -> pd.Series: 
     _, interarrival_times = zero_crossings(spread)
     if interarrival_times: 
@@ -85,3 +164,34 @@ def ssd_distance(prices_df):
     results_df['rank_ssd'] = range(1, len(results_df) + 1)
 
     return results_df
+
+def calculate_rolling_ols_spread_fast(df: pd.DataFrame, 
+                                       asset_a: str, 
+                                       asset_b: str, 
+                                       window: int) -> pd.DataFrame:
+    """
+    Rolling OLS with intercept: y = alpha + beta * x
+    """
+    x = df[asset_b]
+    y = df[asset_a]
+    
+    # Rolling means
+    x_mean = x.rolling(window).mean()
+    y_mean = y.rolling(window).mean()
+    
+    # beta = cov(x,y) / var(x)
+    cov_xy = y.rolling(window).cov(x)
+    var_x = x.rolling(window).var()
+    betas = cov_xy / var_x
+    
+    # alpha = mean(y) - beta * mean(x)
+    alphas = y_mean - betas * x_mean
+    
+    # spread = y - (alpha + beta * x)
+    spread = y - (alphas + betas * x)
+    
+    return pd.DataFrame({
+        'beta': betas, 
+        'alpha': alphas,
+        'spread': spread
+    }, index=df.index)
