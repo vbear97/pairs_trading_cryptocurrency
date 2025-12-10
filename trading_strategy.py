@@ -40,53 +40,7 @@ class BollingerBandTradeStrategy:
 
         return trades
     
-    def plot_trading_actions(self, z_score: pd.Series, trades: pd.DataFrame = None):
-        """
-        Plot z-score with trading actions overlaid
-        
-        Args:
-            z_score: pd.Series of z-scores
-            trades: optional pd.DataFrame with ['enter_long', 'enter_short', 'exit']
-                    if None, will generate trades automatically
-        """
-    
-        # Generate trades if not provided
-        if trades is None:
-            trades = self.generate_trading_actions(z_score)
-        
-        fig, ax = plt.subplots(figsize=(14, 6))
-        
-        # Plot z-score line
-        ax.plot(z_score, label='Z-Score', linewidth=2, color='blue', alpha=0.7)
-        
-        # Plot threshold lines
-        ax.axhline(self.entry_threshold, color='red', linestyle='--', alpha=0.3, label='Entry threshold')
-        ax.axhline(-self.entry_threshold, color='green', linestyle='--', alpha=0.3)
-        ax.axhline(self.exit_threshold, color='orange', linestyle='--', alpha=0.3, label='Exit threshold')
-        ax.axhline(-self.exit_threshold, color='orange', linestyle='--', alpha=0.3)
-        ax.axhline(0, color='black', linestyle='-', alpha=0.2)
-        
-        # Plot trading actions
-        enter_long_idx = trades[trades['enter_long'] == 1].index
-        enter_short_idx = trades[trades['enter_short'] == 1].index
-        exit_idx = trades[trades['exit'] == 1].index
-        
-        ax.scatter(enter_long_idx, z_score[enter_long_idx], 
-                    color='green', s=150, marker='^', label='Enter Long', zorder=5, edgecolors='black')
-        ax.scatter(enter_short_idx, z_score[enter_short_idx], 
-                    color='red', s=150, marker='v', label='Enter Short', zorder=5, edgecolors='black')
-        ax.scatter(exit_idx, z_score[exit_idx], 
-                    color='black', s=150, marker='X', label='Exit', zorder=5)
-        
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Z-Score')
-        ax.set_title('Trading Actions on Z-Score')
-        ax.legend(loc='upper right')
-        ax.grid(True, alpha=0.3)
-
-        fig.tight_layout()
-    
-    def calculate_desired_positions(self, actions: pd.DataFrame, beta: pd.Series) -> pd.DataFrame: 
+    def calculate_desired_positions(self, beta: pd.Series, actions: pd.DataFrame) -> pd.DataFrame: 
         """
         How you trade: Convert trade actions into actual desired position sizes for each timestep 
         
@@ -115,7 +69,7 @@ class BollingerBandTradeStrategy:
                 current_direction = 1
             if actions.loc[idx, 'enter_short']==1: 
                 current_direction = -1
-            elif actions.loc[idx, exit]==1: 
+            elif actions.loc[idx, 'exit']==1: 
                 current_direction = 0 
 
             if current_direction!=0: 
@@ -126,6 +80,122 @@ class BollingerBandTradeStrategy:
                 #TODO - implement rounding/integer for the hedge ratio 
         return positions 
     
+    def plot_positions(self, beta: pd.Series, z_score: pd.Series, actions: pd.DataFrame = None, positions: pd.DataFrame = None):
+        """
+        Plot positions over time with z_score and actions for debugging
+        
+        Args:
+            beta: Series of hedge ratios
+            z_score: optional pd.Series of z-scores
+            actions: optional pd.DataFrame with trades
+            positions: optional pd.DataFrame with positions (if None, will calculate)
+        """
+        
+        # Generate actions if needed
+        if actions is None:
+            actions = self.generate_trading_actions(z_score)
+        
+        # Generate positions if needed
+        if positions is None:
+            positions = self.calculate_desired_positions(beta, actions)
+        
+        fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+        
+        # Plot 1: Z-score with trade signals
+        axes[0].plot(z_score, label='Z-Score', color='blue', linewidth=2)
+        axes[0].axhline(self.entry_threshold, color='r', linestyle='--', alpha=0.3)
+        axes[0].axhline(-self.entry_threshold, color='g', linestyle='--', alpha=0.3)
+        axes[0].axhline(0, color='black', linestyle='-', alpha=0.2)
+        
+        # Mark trades
+        enter_long = actions[actions['enter_long'] == 1].index
+        enter_short = actions[actions['enter_short'] == 1].index
+        exits = actions[actions['exit'] == 1].index
+        
+        axes[0].scatter(enter_long, z_score[enter_long], 
+                    color='green', s=100, marker='^', label='Enter Long', zorder=5)
+        axes[0].scatter(enter_short, z_score[enter_short], 
+                    color='red', s=100, marker='v', label='Enter Short', zorder=5)
+        axes[0].scatter(exits, z_score[exits], 
+                    color='black', s=100, marker='X', label='Exit', zorder=5)
+    
+        axes[0].set_ylabel('Z-Score')
+        axes[0].set_title('Z-Score and Trade Signals')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        # Plot 2: Position in Y
+        axes[1].plot(positions['position_y'], label='Position Y', color='purple', linewidth=2)
+        axes[1].axhline(0, color='black', linestyle='-', alpha=0.3)
+        axes[1].fill_between(positions.index, 0, positions['position_y'], 
+                            where=(positions['position_y'] > 0), alpha=0.3, color='green', label='Long Y')
+        axes[1].fill_between(positions.index, 0, positions['position_y'], 
+                            where=(positions['position_y'] < 0), alpha=0.3, color='red', label='Short Y')
+        axes[1].set_ylabel('Position Y')
+        axes[1].set_title('Position in Asset Y')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        # Plot 3: Position in X
+        axes[2].plot(positions['position_x'], label='Position X', color='orange', linewidth=2)
+        axes[2].axhline(0, color='black', linestyle='-', alpha=0.3)
+        axes[2].fill_between(positions.index, 0, positions['position_x'], 
+                            where=(positions['position_x'] > 0), alpha=0.3, color='green', label='Long X')
+        axes[2].fill_between(positions.index, 0, positions['position_x'], 
+                            where=(positions['position_x'] < 0), alpha=0.3, color='red', label='Short X')
+        axes[2].set_ylabel('Position X')
+        axes[2].set_xlabel('Time')
+        axes[2].set_title('Position in Asset X (Hedge)')
+        axes[2].legend()
+        axes[2].grid(True, alpha=0.3)
+
+        fig.tight_layout()
+
+    def plot_trading_actions(self, z_score: pd.Series, trades: pd.DataFrame = None):
+        """
+        Plot z-score with trading actions overlaid
+        
+        Args:
+            z_score: pd.Series of z-scores
+            trades: optional pd.DataFrame with ['enter_long', 'enter_short', 'exit']
+                    if None, will generate trades automatically
+        """
+        import matplotlib.pyplot as plt
+        
+        # Generate trades if not provided
+        if trades is None:
+            trades = self.generate_trading_actions(z_score)
+        
+        fig, ax = plt.subplots(figsize=(14, 6))
+        
+        # Plot z-score line
+        ax.plot(z_score, label='Z-Score', linewidth=2, color='blue', alpha=0.7)
+        
+        # Plot threshold lines
+        ax.axhline(self.entry_threshold, color='red', linestyle='--', alpha=0.3, label='Entry threshold')
+        ax.axhline(-self.entry_threshold, color='green', linestyle='--', alpha=0.3)
+        ax.axhline(self.exit_threshold, color='orange', linestyle='--', alpha=0.3, label='Exit threshold')
+        ax.axhline(-self.exit_threshold, color='orange', linestyle='--', alpha=0.3)
+        ax.axhline(0, color='black', linestyle='-', alpha=0.2)
+        
+        # Plot trading actions
+        enter_long_idx = trades[trades['enter_long'] == 1].index
+        enter_short_idx = trades[trades['enter_short'] == 1].index
+        exit_idx = trades[trades['exit'] == 1].index
+        
+        ax.scatter(enter_long_idx, z_score[enter_long_idx], 
+                   color='green', s=150, marker='^', label='Enter Long', zorder=5, edgecolors='black')
+        ax.scatter(enter_short_idx, z_score[enter_short_idx], 
+                   color='red', s=150, marker='v', label='Enter Short', zorder=5, edgecolors='black')
+        ax.scatter(exit_idx, z_score[exit_idx], 
+                   color='black', s=150, marker='X', label='Exit', zorder=5)
+        
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Z-Score')
+        ax.set_title('Trading Actions on Z-Score')
+        ax.legend(loc='upper right')
+        ax.grid(True, alpha=0.3)
+    
 def generate_synthetic_zscore(n_periods=100, seed=42):
     '''Generate synthetic z score data that oscillates in a predictable pattern'''
     np.random.seed(seed)
@@ -133,43 +203,3 @@ def generate_synthetic_zscore(n_periods=100, seed=42):
     z_score = np.sin(np.linspace(0, 4*np.pi, n_periods)) * 2.5
     z_score += np.random.randn(n_periods) * 0.3
     return pd.Series(z_score, index=dates)
-
-def plot_trading_actions(z_score, trades, entry_threshold=2.0, exit_threshold=0.5):
-    """
-    Plot z-score with trading actions overlaid
-    
-    Args:
-        z_score: pd.Series of z-scores
-        trades: pd.DataFrame with ['enter_long', 'enter_short', 'exit']
-        entry_threshold: entry threshold level
-        exit_threshold: exit threshold level
-    """
-    fig, ax = plt.subplots(figsize=(14, 6))
-    
-    # Plot z-score line
-    ax.plot(z_score, label='Z-Score', linewidth=2, color='blue', alpha=0.7)
-    
-    # Plot threshold lines
-    ax.axhline(entry_threshold, color='red', linestyle='--', alpha=0.3, label='Entry threshold')
-    ax.axhline(-entry_threshold, color='green', linestyle='--', alpha=0.3)
-    ax.axhline(exit_threshold, color='orange', linestyle='--', alpha=0.3, label='Exit threshold')
-    ax.axhline(-exit_threshold, color='orange', linestyle='--', alpha=0.3)
-    ax.axhline(0, color='black', linestyle='-', alpha=0.2)
-    
-    # Plot trading actions
-    enter_long_idx = trades[trades['enter_long'] == 1].index
-    enter_short_idx = trades[trades['enter_short'] == 1].index
-    exit_idx = trades[trades['exit'] == 1].index
-    
-    ax.scatter(enter_long_idx, z_score[enter_long_idx], 
-               color='green', s=150, marker='^', label='Enter Long', zorder=5, edgecolors='black')
-    ax.scatter(enter_short_idx, z_score[enter_short_idx], 
-               color='red', s=150, marker='v', label='Enter Short', zorder=5, edgecolors='black')
-    ax.scatter(exit_idx, z_score[exit_idx], 
-               color='black', s=150, marker='X', label='Exit', zorder=5)
-    
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Z-Score')
-    ax.set_title('Trading Actions on Z-Score')
-    ax.legend(loc='upper right')
-    ax.grid(True, alpha=0.3)
