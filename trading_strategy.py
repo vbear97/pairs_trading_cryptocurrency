@@ -25,6 +25,9 @@ class BollingerBandTradeStrategy:
         position = 0 # 1 for long, -1 for short, 0 for neutral
 
         for i in range(len(z_score)):
+            if pd.isna(z_score.iloc[i]):
+                continue  # Skip this iteration, maintain current position
+
             if position == 0:
                 # Currently flat, look for entry/exit opportunities 
                 if z_score.iloc[i] < -self.entry_threshold:
@@ -46,7 +49,7 @@ class BollingerBandTradeStrategy:
 
         return trades
     
-    def calculate_desired_positions(self, beta: pd.Series, actions: pd.DataFrame) -> pd.DataFrame: 
+    def _calculate_desired_positions(self, beta: pd.Series, actions: pd.DataFrame) -> pd.DataFrame: 
         """
         How you trade: Convert trade actions into actual desired position sizes for each timestep 
         
