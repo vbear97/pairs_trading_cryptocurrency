@@ -1,11 +1,15 @@
 from typing import Dict, Tuple
 import numpy as np 
 import pandas as pd
+from tqdm import tqdm 
 
-from pairs_trading_cryptocurrency.portfolio_manager.constraints import ConstraintChecker, DummyConstraintChecker 
-from pairs_trading_cryptocurrency.portfolio_manager.metrics import MetricsCalculator
-from pairs_trading_cryptocurrency.portfolio_manager.pnl import PnLCalculator
-from pairs_trading_cryptocurrency.portfolio_manager.transaction_costs import CostCalculator, DummyCostCalculator 
+from .constraints import ConstraintChecker, DummyConstraintChecker 
+from .metrics import MetricsCalculator
+from .pnl import PnLCalculator
+from .transaction_costs import CostCalculator, DummyCostCalculator 
+
+#TODO - fix up implementation of portfolio manager backtest 
+#Should not separate out positions from prices 
 
 class PortfolioManager: 
     '''
@@ -33,7 +37,7 @@ class PortfolioManager:
         if idealised:
             self.constraints = DummyConstraintChecker()
             self.costs = DummyCostCalculator()
-            
+
         self.constraints = ConstraintChecker(
             max_position_value=initial_capital * max_leverage,
             margin_threshold=margin_threshold
@@ -54,68 +58,65 @@ class PortfolioManager:
         self.pnl = PnLCalculator(self.initial_capital)
         self.is_liquidated = False
     
-    #TODO - Make this code more tidier, just an absolute mess of stuff here 
     def backtest(self, 
-                 desired_positions: pd.DataFrame, 
-                 prices_y: pd.DataFrame, 
-                 prices_x: pd.DataFrame) -> Dict:
+                    desired_positions: pd.DataFrame, 
+                    prices_y: pd.DataFrame, 
+                    prices_x: pd.DataFrame) -> Dict:
 
         self._reset()
         self.index = desired_positions.index
 
-        #Initialise 
-        prev_position_y = 0.0   
-        prev_position_x = 0.0
+        # Initialize positions and prices
+        existing_position_y = 0.0 
+        existing_position_x = 0.0
+        prev_price_y = None
+        prev_price_x = None
         
-        #If our portfolio has been liquidated, we can no longer trade 
-        for t, idx in enumerate(desired_positions.index):
+        # If our portfolio has been liquidated, we can no longer trade 
+        for idx in tqdm(desired_positions.index):
             if self.is_liquidated:
                 break
-        
-            #Snapshot: want to move to this position
-            desired_y = desired_positions.loc[idx, 'position_y']
-            desired_x = desired_positions.loc[idx, 'position_x']
-            price_y = prices_y.loc[idx]
-            price_x = prices_x.loc[idx]
 
-            # 1. CONSTRAINTS: Check capital limit
-            within_limit, actual_y, actual_x = self.constraints.check_capital_limit(
+            # Current prices
+            price_y, price_x = prices_y.loc[idx], prices_x.loc[idx]
+
+            # 1. Calculate P&L from price changes on existing position
+            if prev_price_y is not None:
+                price_change_y = price_y - prev_price_y
+                price_change_x = price_x - prev_price_x
+                
+                pnl = self.pnl.calculate_pnl(
+                    existing_position_y, existing_position_x,
+                    price_change_y, price_change_x
+                )
+            else:
+                pnl = 0.0
+
+            # 2. Rebalance portfolio, incur transaction costs
+            desired_y, desired_x = desired_positions.loc[idx, ['position_y', 'position_x']]
+            
+            _, actual_y, actual_x = self.constraints.check_capital_limit(
                 desired_y, desired_x, price_y, price_x
             )
             
-            # Calculate position changes
-            change_y = actual_y - prev_position_y
-            change_x = actual_x - prev_position_x
+            change_y = actual_y - existing_position_y
+            change_x = actual_x - existing_position_x
             
-            # 2. COSTS: Apply transaction costs
-            total_cost = self.costs.calculate_total_cost(
+            transaction_costs = self.costs.calculate_total_cost(
                 change_y, change_x, price_y, price_x
             )
 
-            # 3. P&L: Calculate from price changes
-            if t > 0:
-                prev_idx = desired_positions.index[t-1]
-                price_change_y = price_y - prices_y.loc[prev_idx]
-                price_change_x = price_x - prices_x.loc[prev_idx]
-                
-                pnl = self.pnl.calculate_pnl(
-                    prev_position_y, prev_position_x,
-                    price_change_y, price_change_x
-                )
-                self.pnl.update(pnl, total_cost)
-            else:
-                self.pnl.update(0.0, 0.0)
+            # 3. Update P&L with profit and costs
+            self.pnl.update(pnl, transaction_costs)
         
-            #4. Update position 
-            prev_position_y = actual_y
-            prev_position_x = actual_x
-
-            # 5. Update for next iteration
-            prev_position_y = actual_y
-            prev_position_x = actual_x
+            # 4. Update positions and prices for next iteration
+            existing_position_y = actual_y
+            existing_position_x = actual_x
+            prev_price_y = price_y
+            prev_price_x = price_x
 
         return self._calc_results()
-    
+
     def _calc_results(self) -> Dict: 
 
         # Truncate index if liquidated early
