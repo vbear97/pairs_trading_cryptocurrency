@@ -24,11 +24,13 @@ class PortfolioManager:
     '''
     #TODO - put in terms of UNITS of bitcoin 
     def __init__(self,
+                 trading_periods_per_year: int,
                  idealised: bool = False,
                  initial_capital: float = 10_000,
                  max_leverage: float = 3.0,
                  transaction_cost: float = 0.0025,
-                 margin_threshold: float = 0.5):
+                 margin_threshold: float = 0.5, 
+                 ):
         
         self.initial_capital = initial_capital
         self.position_history = []
@@ -37,17 +39,15 @@ class PortfolioManager:
         if idealised:
             self.constraints = DummyConstraintChecker()
             self.costs = DummyCostCalculator()
-
-        self.constraints = ConstraintChecker(
-            max_position_value=initial_capital * max_leverage,
-            margin_threshold=margin_threshold
-        )
-        self.costs = CostCalculator(
-            transaction_cost_rate=transaction_cost
-        )
+        
+        else: 
+            self.constraints = ConstraintChecker(max_position_value=initial_capital * max_leverage, margin_threshold=margin_threshold)
+            self.costs = CostCalculator(transaction_cost_rate=transaction_cost)
+        
         self.pnl = PnLCalculator(
             initial_capital=initial_capital
-        )    
+        )
+        self.metrics_calc = MetricsCalculator(periods_per_year = trading_periods_per_year)   
         self.is_liquidated = False
         self._reset()
 
@@ -135,7 +135,7 @@ class PortfolioManager:
         total_costs = cost_series.sum()
 
         #Risk adjusted 
-        risk_adjusted = MetricsCalculator.RiskAdjusted.get_all(net_pnl_series, self.initial_capital)
+        risk_adjusted = self.metrics_calc.risk_adjusted.get_all(net_pnl_series, self.initial_capital)
 
         return {
             'position_history': position_history,  
