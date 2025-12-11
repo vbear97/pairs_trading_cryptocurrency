@@ -33,7 +33,7 @@ class PortfolioManager:
                  ):
         
         self.initial_capital = initial_capital
-        self.position_history = []
+        self.position_history = {'position_y': [], 'position_x': []}
         
         # Create helper objects
         if idealised:
@@ -53,7 +53,7 @@ class PortfolioManager:
 
     def _reset(self):
         """Reset state between backtests"""
-        self.position_history = []
+        self.position_history = {'position_y': [], 'position_x': []}
         self.index = None
         self.pnl = PnLCalculator(self.initial_capital)
         self.is_liquidated = False
@@ -114,6 +114,8 @@ class PortfolioManager:
             existing_position_x = actual_x
             prev_price_y = price_y
             prev_price_x = price_x
+            self.position_history['position_y'].append(actual_y)
+            self.position_history['position_x'].append(actual_x)
 
         return self._calc_results()
 
@@ -138,7 +140,7 @@ class PortfolioManager:
         risk_adjusted = self.metrics_calc.risk_adjusted.get_all(net_pnl_series, self.initial_capital)
 
         return {
-            'position_history': position_history,  
+            'position_history': pd.DataFrame(position_history),  
             'equity_curve': equity_curve, 
             'net_pnl_series': net_pnl_series, 
             'gross_pnl_series': gross_pnl_series,
