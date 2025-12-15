@@ -38,6 +38,7 @@ class MetricsCalculator:
         
         def _max_drawdown(self, returns): 
             cum_returns = 1+returns.cumsum()
+            #TODO - confusion about how we actually calculate mean returns here - should it be geometric or arithmetic? 
             # rolling_max = cum_returns.cummax()
             # #TODO - why calculate as percentage? 
             # percentage_drawdown = (rolling_max - cum_returns)/cum_returns #measure decline from rolling peak 
