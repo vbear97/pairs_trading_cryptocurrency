@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from tqdm import tqdm
+from statsmodels.regression.rolling import RollingOLS
 
 class PricingSignal: 
     def __init__(self, hedge_lookback, spread_lookback):
@@ -9,38 +9,28 @@ class PricingSignal:
         self.spread_window = spread_lookback 
     
     def _calculate_hedge_ratio(self, x, y, fit_intercept=True): 
-        '''Calculate dynamic hedge ratio'''
-        betas = []
-        intercepts = []
-
-        for i in tqdm(range(self.hedge_window, len(x))):
-            # Get window of data
-            x_window = x.iloc[i - self.hedge_window : i]
-            y_window = y.iloc[i - self.hedge_window : i]
-            
-            # Add constant for intercept if needed
-            X = sm.add_constant(x_window) if fit_intercept else x_window
-            
-            # Run OLS: y = alpha + beta * x
-            model = sm.OLS(y_window, X).fit()
-            params = list(model.params)
-
-            if fit_intercept:
-                intercepts.append(params[0])
-                betas.append(params[1])
-            else:
-                intercepts.append(0.0)  # or None, or np.nan depending on your needs
-                betas.append(params[0])
-        
-        # Create series with proper index
-        beta_series = pd.Series(betas, index=x.index[self.hedge_window:])
-        intercept_series = pd.Series(intercepts, index=x.index[self.hedge_window:])
-        
-        # Reindex to match original data (fill early values with NaN)
-        beta_series = beta_series.reindex(x.index)
-        intercept_series = intercept_series.reindex(x.index)
-        
-        return intercept_series, beta_series
+        if fit_intercept:
+            X = sm.add_constant(x)
+            exog_idx = 1  # Beta is second column
+            const_idx = 0
+        else:
+            X = x.to_frame() if isinstance(x, pd.Series) else x
+            exog_idx = 0
+            const_idx = None
+    
+        # Fit rolling OLS
+        model = RollingOLS(y, X, window=self.hedge_window)
+        rolling_res = model.fit()
+    
+        # Extract parameters
+        betas = rolling_res.params.iloc[:, exog_idx]
+    
+        if fit_intercept:
+            intercepts = rolling_res.params.iloc[:, const_idx]
+        else:
+            intercepts = pd.Series(0.0, index=betas.index)
+    
+        return intercepts, betas
     
     def _calculate_spread(self, x, y, intercept, beta): 
         '''Calculate spread based off dynamic hedge ratio'''
@@ -51,7 +41,7 @@ class PricingSignal:
         mean = spread.rolling(self.spread_window).mean()
         std = spread.rolling(self.spread_window).std()
         return (spread - mean) / std
-    
+    #TODO - remove _
     def _generate(self, x, y):
         """
         Full pipeline: prices → signal
