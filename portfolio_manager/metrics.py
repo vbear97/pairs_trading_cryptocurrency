@@ -25,14 +25,37 @@ class MetricsCalculator:
             returns = net_pnl_series / initial_capital
             return np.sqrt(self.periods_per_year) * returns.mean() / returns.std()
         
+        def absolute_sortino_ratio(self, net_pnl_series): 
+            '''Absolute sortino based on pnl series only'''
+            returns = net_pnl_series 
+            downside_returns = returns[returns<0]
+            return np.sqrt(self.periods_per_year) * downside_returns.mean() / downside_returns.std()
+        
         def sortino_ratio(self, net_pnl_series, initial_capital):
             returns = net_pnl_series / initial_capital
             downside = returns[returns < 0]
             return np.sqrt(self.periods_per_year) * returns.mean() / downside.std()
-    
+        
+        def _max_drawdown(self, returns): 
+            cum_returns = 1+returns.cumsum()
+            # rolling_max = cum_returns.cummax()
+            # #TODO - why calculate as percentage? 
+            # percentage_drawdown = (rolling_max - cum_returns)/cum_returns #measure decline from rolling peak 
+            # max_drawdown = percentage_drawdown.max()
+            # return max_drawdown
+        
+        def _max_drawdown_duration(self, returns): 
+            pass 
+        
+        def absolute_calmar_ratio(self, net_pnl_series):
+            '''Absolute calmar ratio based on pnl series only'''
+            # returns = net_pnl_series
+            # max_drawdown = self._absolute_max_drawdown(returns)
+            # return np.sqrt(self.periods_per_year) * returns.mean() / max_drawdown
+
         def get_all(self, net_pnl_series, initial_capital):
             return {
                 'absolute_sharpe': self.absolute_sharpe_ratio(net_pnl_series),
                 'sharpe': self.sharpe_ratio(net_pnl_series, initial_capital),
-                'sortino': self.sortino_ratio(net_pnl_series, initial_capital),
+                'absolute_sortino': self.absolute_sortino_ratio(net_pnl_series),
             }
