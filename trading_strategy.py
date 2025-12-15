@@ -106,7 +106,7 @@ class BollingerBandTradeStrategy:
         
         # Generate positions if needed
         if positions is None:
-            positions = self.calculate_desired_positions(beta, actions)
+            positions = self._calculate_desired_positions(beta, actions)
         
         fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
         
