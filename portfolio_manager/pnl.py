@@ -1,33 +1,37 @@
+import pandas as pd
+import numpy as np 
+
 class PnLCalculator:
     """Handles P&L calculations and tracking"""
-    
     def __init__(self, initial_capital: float): 
         self.initial_capital = initial_capital
-        self.equity = initial_capital #Equity = current net worth in the account = Initial Capital + Cumulative P&L - Cumulative Costs
-        self.equity_curve = []
-        self.gross_pnl_series = []
-        self.net_pnl_series = []
-        self.cost_series = []
-    
-    def calculate_pnl(self,
-                     current_position_y: float,
-                     current_position_x: float,
-                     price_change_y: float,
-                     price_change_x: float) -> float:
-        """Calculate mark-to-market P&L"""
-        return current_position_y * price_change_y + current_position_x * price_change_x
-    
-    def update(self, pnl: float, cost: float):
-        """Update equity with PnL and costs together"""
-        net_pnl = pnl - cost 
-        self.equity += net_pnl 
-        self.gross_pnl_series.append(pnl) #before costs
-        self.net_pnl_series.append(net_pnl) #after costs
-        self.cost_series.append(cost)
-        self.equity_curve.append(self.equity)
-    
-    def deduct_cost(self, total_cost): 
-         self.pnl -= total_cost
+        self.equity = initial_capital #Current net worth in the account = Initial Capital 
 
-    def get_equity(self) -> float:
-        return self.equity
+        #Instantaneous/snapshot 
+        self.cash_flow_series = []
+        self.position_value_series = []
+        self.cost_series = []
+
+        #state 
+        self.cash_holdings = None
+        self.portfolio_value = None
+        self.pnl_series = None 
+
+
+    def update(self, cash_flow_t: float, position_value_t: float, cost_t: float): 
+        # Record time series 
+        self.position_value_series.append(position_value_t)
+        self.cash_flow_series.append(cash_flow_t)
+        self.cost_series.append(cost_t) 
+
+    def summarise(self):
+        cash_flows = np.array(self.cash_flow_series)
+        costs = np.array(self.cost_series)
+        position_values = np.array(self.position_value_series)
+    
+        cumulative_cash = np.cumsum(cash_flows) - np.cumsum(costs)
+        equity_curve = self.initial_capital + cumulative_cash + position_values
+    
+        self.equity_curve = np.concatenate([[self.initial_capital], equity_curve])
+        self.pnl_series = np.diff(self.equity_curve)
+        self.equity = self.equity_curve[-1]
