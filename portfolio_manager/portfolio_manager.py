@@ -97,16 +97,16 @@ class PortfolioManager:
             - prices_y, prices_x: : 2 col dataframe with col 'bid' and 'ask' 
         '''
         self._reset()
-        self.index = close_position.index
 
         # Initialize positions and prices
         existing_position_y = 0.0 
         existing_position_x = 0.0
 
-        #TODO - fix this 
         if not instant_execution: 
-            #Introduce one period lag: at end of period t-1 we have desired position that we can only execute based on t prices 
-            close_position = close_position.shift(1)
+            #1 period lag: at end of period t-1 we have desired position that we can only execute based on period t prices 
+            #also, reset the index 
+            close_position = close_position.shift(1)[1:]
+        self.index = close_position.index
         
         # If our portfolio has been liquidated, we can no longer trade 
         for idx in tqdm(close_position.index):
@@ -129,7 +129,7 @@ class PortfolioManager:
 
             ##Cash flows 
             cash_flow_y = self._rebalance_portfolio(price_y, existing_position_y, new_position_y)
-            cash_flow_x = self._rebalance_portfolio(price_x, existing_position_x, new_position_x)
+            cash_flow_x= self._rebalance_portfolio(price_x, existing_position_x, new_position_x)
             cash_flow = cash_flow_y + cash_flow_x
 
             # Cost 
