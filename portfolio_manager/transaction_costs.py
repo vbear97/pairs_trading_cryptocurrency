@@ -30,9 +30,8 @@ class DummyCostCalculator:
     def __init__(self, *args, **kwargs):
         pass
     
-    def calculate_trade_cost(self, position_change, current_price):
+    def calculate_trade_cost(self):
         return 0.0
     
-    def calculate_total_cost(self, position_change_y, position_change_x, 
-                            current_price_y, current_price_x):
+    def calculate_total_cost(self):
         return 0.0
