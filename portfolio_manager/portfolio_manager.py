@@ -44,7 +44,7 @@ class PortfolioManager:
             self.constraints = ConstraintChecker(max_position_value=initial_capital * max_leverage, margin_threshold=margin_threshold)
             self.costs = CostCalculator(transaction_cost_rate=transaction_cost)
         
-        self.pnl = PnLCalculator(
+        self.pnl_calculator = PnLCalculator(
             initial_capital=initial_capital
         )
         self.metrics_calc = MetricsCalculator(periods_per_year = trading_periods_per_year)   
@@ -55,27 +55,27 @@ class PortfolioManager:
         """Reset state between backtests"""
         self.position_history = {'position_y': [], 'position_x': []}
         self.index = None
-        self.pnl = PnLCalculator(self.initial_capital)
+        self.pnl_calculator = PnLCalculator(self.initial_capital)
         self.is_liquidated = False
 
-    def _rebalance_portfolio(price: pd.Series, existing_position: float, new_position: float):
+    def _rebalance_portfolio(self, price: pd.Series, existing_position: float, new_position: float):
         '''Rebalance position of one asset using current bid/ask prices.'''
         change = new_position - existing_position
         if change == 0:
             return 0.0
-        if change > 0:  # Going more LONG - buy MORE at the ask price 
+        if change > 0:  # Going more LONG, therefore buy MORE at the ask price 
             gross_cash_flow = -change * price['ask']
         else:  # Going more short: 
             gross_cash_flow = -change * price['bid']
         return gross_cash_flow
     
-    def _mark_to_market_position(price: pd.Series, new_position: float) -> float: 
+    def _mark_to_market_position(self, price: pd.Series, new_position: float) -> float: 
         '''Calculate mark to market position of one asset using current bid/ask prices'''
         if new_position < 0: 
-            #Close short position by BUYING it back at the ask price 
+            #short position value = close by BUYING at the ask price 
             return new_position*price['ask']
         elif new_position > 0: 
-            #Close long position by SELLING it at the bid price 
+            #long position value = close by SELLING at the bid price 
             return new_position*price['bid']
         else: 
             return 0.0
@@ -97,6 +97,7 @@ class PortfolioManager:
             - prices_y, prices_x: : 2 col dataframe with col 'bid' and 'ask' 
         '''
         self._reset()
+        self.index = close_position.index
 
         # Initialize positions and prices
         existing_position_y = 0.0 
@@ -104,9 +105,7 @@ class PortfolioManager:
 
         if not instant_execution: 
             #1 period lag: at end of period t-1 we have desired position that we can only execute based on period t prices 
-            #also, reset the index 
-            close_position = close_position.shift(1)[1:]
-        self.index = close_position.index
+            close_position = close_position.shift(1, fill_value = 0.0)
         
         # If our portfolio has been liquidated, we can no longer trade 
         for idx in tqdm(close_position.index):
@@ -146,34 +145,33 @@ class PortfolioManager:
             existing_position_x = new_position_x
 
             #4. Update PnL 
-            self.pnl.update(cash_flow, position_value, transaction_costs)
-
-        self.pnl.summarise()
+            self.pnl_calculator.update(cash_flow, position_value, transaction_costs)
+        
+        self.pnl_calculator.summarise()
         return self._calc_results()
 
     def _calc_results(self) -> Dict: 
 
         # Truncate index if liquidated early
-        n = len(self.pnl.equity_curve)
+        n = len(self.pnl_calculator.equity_curve)
         idx = self.index[:n]
 
-        # Convert to Series with index
-        equity_curve = pd.Series(self.pnl.equity_curve, index=idx)
-        pnl_series = pd.Series(self.pnl.pnl_series, index=idx)
-        cost_series = pd.Series(self.pnl.cost_series, index=idx)
-        position_history = pd.DataFrame(self.position_history, index=idx)
-
         #Risk adjusted 
-        risk_adjusted = self.metrics_calc.risk_adjusted.get_all(pnl_series, self.initial_capital)
+        equity = pd.Series(self.pnl_calculator.equity_curve, index=idx)
+        pnl = equity.diff()
+        risk_adjusted = self.metrics_calc.risk_adjusted.get_all(pnl, self.initial_capital)
 
         return {
-            'position_history': pd.DataFrame(position_history),  
-            'equity_curve': equity_curve, 
-            'pnl_series': pnl_series, 
-            'cost_series': cost_series, 
+            'position_history': pd.DataFrame(self.position_history, index=idx), 
+            'cost': pd.Series(self.pnl_calculator.cost_series, index=idx),
+            'cash_flow': pd.Series(self.pnl_calculator.cash_flow_series, index = idx),
+            'cash_holdings': pd.Series(self.pnl_calculator.cash_holdings, index = idx),
+            'position_value':  pd.Series(self.pnl_calculator.position_value_series, index = idx),
+            'equity_curve': equity, 
+            'pnl': pnl,
 
             #summary metrics 
-            'final_equity': self.pnl.equity, 
+            'final_equity': self.pnl_calculator.equity, 
             'is_liquidated': self.is_liquidated, 
 
             #risk adjusted metrics 
