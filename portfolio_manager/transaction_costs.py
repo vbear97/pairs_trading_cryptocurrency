@@ -10,7 +10,7 @@ class CostCalculator:
                             position_change: float, 
                             current_price: float) -> float:
         """Calculate cost for one leg"""
-        #TODO - Can make more complex one we incorporate other costs 
+        #If we are going more long/short, we buy/sell more at the ask/bid price 
         current_price = current_price['ask'] if position_change > 0 else current_price['bid']
         trade_value = abs(position_change * current_price)
         return trade_value * self.transaction_cost_rate
