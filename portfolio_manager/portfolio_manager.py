@@ -28,7 +28,7 @@ class PortfolioManager:
                  idealised: bool = False,
                  initial_capital: float = 10_000,
                  max_leverage: float = 3.0,
-                 transaction_cost: float = 0.0025,
+                 transaction_cost: float = 0.0,
                  margin_threshold: float = 0.5, 
                  ):
         
@@ -38,12 +38,11 @@ class PortfolioManager:
         # Create helper objects
         if idealised:
             self.constraints = DummyConstraintChecker()
-            self.costs = DummyCostCalculator()
         
         else: 
             self.constraints = ConstraintChecker(max_position_value=initial_capital * max_leverage, margin_threshold=margin_threshold)
-            self.costs = CostCalculator(transaction_cost_rate=transaction_cost)
         
+        self.costs =  CostCalculator(transaction_cost_rate=transaction_cost)
         self.pnl_calculator = PnLCalculator(
             initial_capital=initial_capital
         )
@@ -82,8 +81,8 @@ class PortfolioManager:
     
     def backtest(self, 
                     close_position: pd.DataFrame, 
-                    prices_y: pd.DataFrame, 
-                    prices_x: pd.DataFrame,
+                    price_series_y: pd.DataFrame, 
+                    price_series_x: pd.DataFrame,
                     instant_execution: bool = False
                     ) -> Dict:
         '''
@@ -114,9 +113,9 @@ class PortfolioManager:
 
             #TODO - deal with special case of the first signal 
             # Current prices 
-            price_y, price_x = prices_y.loc[idx], prices_x.loc[idx]
+            price_y, price_x = price_series_y.loc[idx], price_series_x.loc[idx]
 
-            #1. Rebalance portfolio and calculate cash flows 
+            #1. Rebalance portfolio 
             ##Rebalance portfolio 
             desired_y, desired_x = close_position.loc[idx, ['position_y', 'position_x']]
             #TODO - Redo this once we enact capital limits - no problem for now 
@@ -125,15 +124,17 @@ class PortfolioManager:
             )
             self.position_history['position_y'].append(new_position_y)
             self.position_history['position_x'].append(new_position_x)
-
+            
             ##Cash flows 
             cash_flow_y = self._rebalance_portfolio(price_y, existing_position_y, new_position_y)
             cash_flow_x= self._rebalance_portfolio(price_x, existing_position_x, new_position_x)
             cash_flow = cash_flow_y + cash_flow_x
 
-            # Cost 
-            #TODO - change once we incorporate transaction costs
-            transaction_costs = self.costs.calculate_total_cost()
+            # Costs 
+            # TODO - refactor this code
+            position_change_y = new_position_y - existing_position_y
+            position_change_x = new_position_x - existing_position_x
+            transaction_costs = self.costs.calculate_total_cost(position_change_y, position_change_x, price_y, price_x)
 
             #2. Calculate mark to market position value of new position 
             position_value_y = self._mark_to_market_position(price_y, new_position_y)
