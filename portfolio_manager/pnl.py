@@ -1,34 +1,44 @@
+from typing import Dict
 import pandas as pd
 import numpy as np 
 
 class PnLCalculator:
     """Handles P&L calculations and tracking"""
-    def __init__(self, initial_capital: float): 
+    def __init__(self, initial_capital: float, index: pd.Index = None): 
         self.initial_capital = initial_capital
-        self.equity = initial_capital  #Current net worth in the account = Initial Capital 
+        self.index = index
 
         #Instantaneous/snapshot 
-        self.cash_flow_series = []
-        self.position_value_series = []
-        self.cost_series = []
+        self.state_df = pd.DataFrame({
+            'cash_flow': pd.Series(0.0, index = self.index), 
+            'position_value': pd.Series(0.0, index = self.index), 
+            'cost_spot': pd.Series(0.0, index = self.index), 
+            'cost_interest': pd.Series(0.0, index = self.index), 
+            'cost': pd.Series(0.0, index = self.index), 
+        })
 
-        #state 
-        self.cash_holdings = None
-        self.equity_curve = None 
+        #cumulative
+        self.cum_df= pd.DataFrame({
+            'running_cash': pd.Series(0.0, index = self.index), 
+            'equity_curve': pd.Series(0.0, index = self.index),
+        })
 
-    def update(self, cash_flow_t: float, position_value_t: float, cost_t: float): 
-        # Record time series 
-        self.position_value_series.append(position_value_t)
-        self.cash_flow_series.append(cash_flow_t)
-        self.cost_series.append(cost_t) 
+        self.summary_df = None
+
+    def update(self, t: pd.Timestamp, cash_flow_by_coin: pd.Series, position_value_by_coin: pd.Series, cost_by_type_coin: Dict[str, pd.Series]): 
+        self.state_df.loc[t, ['cash_flow', 'position_value', 'cost_spot', 'cost_interest']] = [
+            cash_flow_by_coin.sum(), 
+            position_value_by_coin.sum(), 
+            cost_by_type_coin['spot'].sum(), 
+            cost_by_type_coin['interest'].sum()
+        ]
+        #We need to update costs at every step to keep track of margins
+        self.state_df.loc[t, 'cost'] = self.state_df.loc[t, ['cost_spot', 'cost_interest']].sum()
 
     def summarise(self):
-        #reformat 
-        self.cash_flow_series = np.array(self.cash_flow_series)
-        self.position_value_series = np.array(self.position_value_series)
-        self.costs = np.array(self.cost_series)
-
-        #calculate other 
-        self.cash_holdings = np.cumsum(self.cash_flow_series) - np.cumsum(self.cost_series)
-        self.equity_curve = self.initial_capital + self.cash_holdings + self.position_value_series
-        self.equity = self.equity_curve[-1]
+        #Update 
+        self.cum_df['running_cost'] = self.state_df['cost'].cumsum()
+        self.cum_df['running_cash_gross'] =  self.state_df['cash_flow'].cumsum()
+        self.cum_df['running_cash'] = self.cum_df['running_cash_gross'] - self.cum_df['running_cost']
+        self.cum_df['equity_curve'] = self.initial_capital + self.cum_df['running_cash'] + self.state_df['position_value']   
+        self.summary_df = pd.concat([self.state_df, self.cum_df], axis = 1)

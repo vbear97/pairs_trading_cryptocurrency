@@ -1,5 +1,6 @@
 from typing import Tuple
 import numpy as np 
+import pandas as pd
 
 class ConstraintChecker: 
     """Handle constraint enforcement"""
@@ -46,9 +47,9 @@ class DummyConstraintChecker:
     def __init__(self, *args, **kwargs):
         pass
     
-    def check_capital_limit(self, desired_y, desired_x, price_y, price_x):
+    def check_capital_limit(self, positions: pd.Series):
         """Return desired positions unchanged"""
-        return True, desired_y, desired_x
+        return positions
     
     def check_margin_call(self, equity, initial_capital):
         """Never trigger margin calls"""
