@@ -54,11 +54,11 @@ class PortfolioManager:
         for coin, delta in position_change_by_coin.items()
         })
 
-    def _calc_m2m_by_coin(self, position: pd.Series, price: pd.Series,) -> pd.Series: 
+    def _calc_m2m_by_coin(self, position_by_coin: pd.Series, price_df: pd.Series) -> pd.Series: 
         '''Calculate mark to market position of one asset using current bid/ask prices'''
         m2m_by_coin = pd.Series({
-            coin: pos * (current_price_df[coin]['ask'] if pos < 0 else current_price_df[coin]['bid'])
-            for coin, pos in current_position_by_coin.items()
+            coin: pos * (price_df[coin]['ask'] if pos < 0 else price_df[coin]['bid'])
+            for coin, pos in position_by_coin.items()
         })
         return m2m_by_coin
     
@@ -103,7 +103,8 @@ class PortfolioManager:
             ##Rebalance portfolio 
             current_price_df, current_position_by_coin = prices_df.loc[t], close_position_df.loc[t]
             prev_position_by_coin = position_df.iloc[idx-1] if idx>0 else pd.Series(0.0, index = coins)
-            current_equity = pnl_calculator.state_df.loc[t, 'equity'] if idx > 0 else self.initial_capital
+            #TODO - FIX - bug fix here for current equity/capital limit calculation 
+            #current_equity = pnl_calculator.state_df.loc[t, 'equity'] if idx > 0 else self.initial_capital
             position_change_by_coin = self.constraints.check_capital_limit(
                 prev_position_by_coin,
                 current_position_by_coin,
@@ -130,7 +131,7 @@ class PortfolioManager:
             m2m_by_coin= self._calc_m2m_by_coin(current_position_by_coin, current_price_df)
 
             #4. Update PnL 
-            pnl_calculator.update(t, cash_flow_by_coin, m2m_by_coin, transaction_costs_by_type_coin)
+            current_equity = pnl_calculator.update(t, cash_flow_by_coin, m2m_by_coin, transaction_costs_by_type_coin)
 
             #Check margin requirement 
             total_position_value = m2m_by_coin.abs().sum()
