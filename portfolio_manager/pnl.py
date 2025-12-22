@@ -18,6 +18,9 @@ class PnLCalculator:
             'cost': pd.Series(0.0, index = self.index), 
             'equity': pd.Series(0.0, index = self.index)
         })
+        #Running variables 
+        self._running_cost = 0.0  
+        self._running_cash = 0.0  
 
         #cumulative
         self.cum_df= pd.DataFrame({
@@ -34,12 +37,10 @@ class PnLCalculator:
             cost_by_type_coin['interest'].sum()
         ]
         #We need to update costs at every step to keep track of margins
-        self.state_df.loc[t, 'cost'] = self.state_df.loc[t, ['cost_spot', 'cost_interest']].sum()
-
-            # Calculate equity incrementally (ADD THIS)
-        running_cost = self.state_df.loc[:t, 'cost'].sum()
-        running_cash = self.state_df.loc[:t, 'cash_flow'].sum()
-        current_equity = self.initial_capital + running_cash - running_cost + position_value_by_coin.sum()
+        cost_t = self.state_df.loc[t, ['cost_spot', 'cost_interest']].sum()
+        self._running_cost += cost_t
+        self._running_cash += cash_flow_by_coin.sum()
+        current_equity = self.initial_capital + self._running_cash - self._running_cost + position_value_by_coin.sum()
         self.state_df.loc[t, 'equity'] = current_equity
 
     def summarise(self):

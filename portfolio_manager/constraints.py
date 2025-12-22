@@ -7,7 +7,7 @@ class ConstraintChecker:
     """Handle constraint enforcement"""
     def __init__(self, 
                     max_leverage: float, 
-                    margin_threshold: float
+                    margin_threshold: float,
                     min_order_value_usdt_by_coin, 
                     min_position_tick_size_by_coin
                     ):
@@ -82,9 +82,13 @@ class DummyConstraintChecker:
     def __init__(self, *args, **kwargs):
         pass
 
-    def check_capital_limit(self, positions: pd.Series):
-        """Return desired positions unchanged"""
-        return positions
+    def check_capital_limit(self, 
+                        prev_position_by_coin: pd.Series, 
+                        desired_position_by_coin: pd.Series, 
+                        prices_df: pd.DataFrame, 
+                        current_equity: float) -> pd.Series:
+        
+        return desired_position_by_coin - prev_position_by_coin
 
     def check_margin_call(self, equity, initial_capital):
         """Never trigger margin calls"""
