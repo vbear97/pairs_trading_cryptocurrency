@@ -99,9 +99,6 @@ class PortfolioManager:
         
         # If our portfolio has been liquidated, we can no longer trade 
         for idx, t in enumerate(tqdm(close_position_df.index)):
-            if self.is_liquidated: 
-                break
-
             ##Rebalance portfolio 
             current_price_df, current_position_by_coin = prices_df.loc[t], close_position_df.loc[t]
             prev_position_by_coin = close_position.iloc[idx-1] if idx>0 else pd.Series(0.0, index = coins)
@@ -112,13 +109,13 @@ class PortfolioManager:
                 current_price_df, 
                 current_equity
                 )
+            current_position_by_coin = prev_position_by_coin + position_change_by_coin
             
             ##Cash flows 
             cash_flow_by_coin = self._calc_cash_flow_by_coin(position_change_by_coin, current_price_df)
 
             #Adjust position 
-            position_df.loc[t] = prev_position_by_coin + position_change_by_coin
-
+            position_df.loc[t] = current_position_by_coin
             # Costs 
             if (t.minute ==0 & t.second ==0):
                 start_hour = t - pd.Timedelta(hours=1)
@@ -133,7 +130,14 @@ class PortfolioManager:
 
             #4. Update PnL 
             pnl_calculator.update(t, cash_flow_by_coin, m2m_by_coin, transaction_costs_by_type_coin)
-        
-        pnl_calculator.summarise()
 
+            #Check margin requirement 
+            total_position_value = m2m_by_coin.abs().sum()
+            #LIQUIDATION: Close all positions for remainder of backtest 
+            if self.constraints.check_margin_call(current_equity, total_position_value): 
+                position_df.loc[t:]=0
+                self.liquidated = True
+                break
+            
+        pnl_calculator.summarise()
         return self._calc_results(pnl_calculator, position_df)
