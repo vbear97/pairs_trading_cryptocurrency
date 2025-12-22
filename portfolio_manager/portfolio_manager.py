@@ -103,13 +103,21 @@ class PortfolioManager:
                 break
 
             ##Rebalance portfolio 
-            current_price_df, current_position_df = prices_df.loc[t], close_position_df.loc[t]
-            current_position_df = self.constraints.check_capital_limit(current_position_df)
-            position_df.loc[t] = current_position_df
+            current_price_df, current_position_by_coin = prices_df.loc[t], close_position_df.loc[t]
+            prev_position_by_coin = close_position.iloc[idx-1] if idx>0 else pd.Series(0.0, index = coins)
+            current_equity = pnl_calculator.state_df.loc[t, 'equity'] if idx > 0 else self.initial_capital
+            position_change_by_coin = self.constraints.check_capital_limit(
+                prev_position_by_coin,
+                current_position_by_coin 
+                current_price_df, 
+                current_equity
+                )
             
             ##Cash flows 
-            position_change_by_coin = (position_df.iloc[idx] - position_df.iloc[idx-1]) if idx > 0 else pd.Series(0.0, index = coins)
             cash_flow_by_coin = self._calc_cash_flow_by_coin(position_change_by_coin, current_price_df)
+
+            #Adjust position 
+            position_df.loc[t] = prev_position_by_coin + position_change_by_coin
 
             # Costs 
             if (t.minute ==0 & t.second ==0):
@@ -121,7 +129,7 @@ class PortfolioManager:
             else: 
                   transaction_costs_by_type_coin = self.costs.calc_total_cost(position_change_by_coin, current_price_df)
             #m2m
-            m2m_by_coin= self._calc_m2m_by_coin(current_position_df, current_price_df)
+            m2m_by_coin= self._calc_m2m_by_coin(current_position_by_coin, current_price_df)
 
             #4. Update PnL 
             pnl_calculator.update(t, cash_flow_by_coin, m2m_by_coin, transaction_costs_by_type_coin)
