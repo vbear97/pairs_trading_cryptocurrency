@@ -104,7 +104,7 @@ class PortfolioManager:
             current_price_df, current_position_by_coin = prices_df.loc[t], close_position_df.loc[t]
             prev_position_by_coin = position_df.iloc[idx-1] if idx>0 else pd.Series(0.0, index = coins)
             #TODO - FIX - bug fix here for current equity/capital limit calculation 
-            #current_equity = pnl_calculator.state_df.loc[t, 'equity'] if idx > 0 else self.initial_capital
+            current_equity = pnl_calculator.state_df.iloc[idx-1]['equity'] if idx > 0 else self.initial_capital
             position_change_by_coin = self.constraints.check_capital_limit(
                 prev_position_by_coin,
                 current_position_by_coin,

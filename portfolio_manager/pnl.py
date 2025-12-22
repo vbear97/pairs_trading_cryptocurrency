@@ -1,3 +1,4 @@
+import pandas as pd
 class PnLCalculator:
     def __init__(self, initial_capital: float, index: pd.Index = None): 
         self.initial_capital = initial_capital
