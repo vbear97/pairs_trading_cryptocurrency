@@ -117,7 +117,7 @@ class PortfolioManager:
             #Adjust position 
             position_df.loc[t] = current_position_by_coin
             # Costs 
-            if (t.minute ==0 & t.second ==0):
+            if (t.minute ==0 and t.second ==0):
                 start_hour = t - pd.Timedelta(hours=1)
                 #Calculat interest fees that occured in the previous hour 
                 recent_position_df = position_df.loc[start_hour:t].iloc[:-1]
