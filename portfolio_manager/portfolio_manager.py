@@ -56,10 +56,11 @@ class PortfolioManager:
 
     def _calc_m2m_by_coin(self, position: pd.Series, price: pd.Series,) -> pd.Series: 
         '''Calculate mark to market position of one asset using current bid/ask prices'''
-        m2m_by_coin = {
-            #to close a short/long position, we buy/sell at the ask/bid price 
-            coin: position*price[coin]['ask' if position < 0 else 'bid'] for (coin, position) in position.items() }
-        return pd.Series(m2m_by_coin)
+        m2m_by_coin = pd.Series({
+            coin: pos * (current_price_df[coin]['ask'] if pos < 0 else current_price_df[coin]['bid'])
+            for coin, pos in current_position_by_coin.items()
+        })
+        return m2m_by_coin
     
     def _calc_results(self, pnl_calculator: PnLCalculator, position_df: pd.DataFrame) -> Dict: 
         pnl = pnl_calculator.cum_df['equity_curve'].diff()
