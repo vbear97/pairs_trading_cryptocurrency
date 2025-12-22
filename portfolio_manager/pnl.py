@@ -38,8 +38,13 @@ class PnLCalculator:
         ]
         #We need to update costs at every step to keep track of margins
         cost_t = self.state_df.loc[t, ['cost_spot', 'cost_interest']].sum()
+        self.state_df.loc[t, 'cost'] = cost_t
+
+        #Update running totals incrementally to save speed 
         self._running_cost += cost_t
         self._running_cash += cash_flow_by_coin.sum()
+
+        #Calculate equity 
         current_equity = self.initial_capital + self._running_cash - self._running_cost + position_value_by_coin.sum()
         self.state_df.loc[t, 'equity'] = current_equity
 
