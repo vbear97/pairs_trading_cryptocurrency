@@ -16,7 +16,7 @@ class ConstraintChecker:
         self.min_order_value_usdt_by_coin = min_order_value_usdt_by_coin
         self.tick_size_by_coin = min_position_tick_size_by_coin
 
-    def _round_and_filter_position_changes(self, position_change: pd.Series, prices_df: pd.Series) -> pd.Series:
+    def _round_and_filter_position_changes(self, position_change: pd.Series, prices_df: pd.DataFrame) -> pd.Series:
         """Round to tick sizes and zero out positions below minimum"""
         # Round to tick sizes
         rounded_position_change = pd.Series({
